@@ -36,7 +36,7 @@ function elective(){let h=`<h1>선택과목 고르기</h1><p>총 <b id="cnt">0</
 function count(){let n=document.querySelectorAll('input[type=checkbox]:checked:not([data-none])').length;$('#cnt').textContent=n}window.count=count;
 function none(el){let box=el.closest('.card');box.querySelectorAll('input[type=checkbox]:not([data-none])').forEach(x=>{if(el.checked)x.checked=false;x.disabled=el.checked});count()}window.none=none;
 async function saveElectives(){let a=[...document.querySelectorAll('input[type=checkbox]:checked:not([data-none])')].map(x=>x.value);if(a.length!==4)return alert('선택과목은 정확히 4개여야 합니다.');let {data,error}=await db.rpc('save_student_profile',{p_student_id:me.student_id,p_name:me.name,p_electives:a});if(error)return alert(error.message);me=data;localStorage.setItem('class_me',JSON.stringify(me));tab='feed';render()}window.saveElectives=saveElectives;
-function postCard(p){let admin=['20410','20423'].includes(me?.student_id);return `<div class="card post ${subjectClass(p.subject)}"><div class="meta">${esc(p.subject)} · 수행일 ${p.performance_date}</div><h2>${esc(p.title)}</h2><div>${esc(p.content).replace(/\n/g,'<br>')}</div>${p.image_url?`<img src="${p.image_url}" style="width:100%;border-radius:14px;margin-top:12px">`:''}${admin?`<button class="deleteBtn" onclick="deletePost('${p.id}')">🗑️ 이 공지 삭제</button>`:''}</div>`}
+function postCard(p){let canDelete=['20410','20423'].includes(me?.student_id)&&adminUnlocked;return `<div class="card post ${subjectClass(p.subject)}"><div class="meta">${esc(p.subject)} · 수행일 ${p.performance_date}</div><h2>${esc(p.title)}</h2><div>${esc(p.content).replace(/\n/g,'<br>')}</div>${p.image_url?`<img src="${p.image_url}" style="width:100%;border-radius:14px;margin-top:12px">`:''}${canDelete?`<button class="deleteBtn" onclick="deletePost('${p.id}')">🗑️ 이 공지 삭제</button>`:''}</div>`}
 function feed(){let mine=new Set([...common,...(me.electives||[])]);let list=posts.filter(p=>mine.has(p.subject));shell(`<h1>✦ 최신 수행평가</h1>${list.length?list.map(postCard).join(''):'<div class="card">아직 등록된 수행평가가 없어요!</div>'}`)}
 function subjects(){let mine=[...common,...(me.electives||[])];shell(`<h1>📚 과목별 확인</h1><div class="card"><select id="subjectPick" onchange="showSubject(this.value)"><option value="">과목을 선택하세요</option>${mine.map(x=>`<option>${x}</option>`).join('')}</select></div><div id="subjectPosts"></div>`)}window.showSubject=s=>$('#subjectPosts').innerHTML=posts.filter(p=>p.subject===s).map(postCard).join('')||'<div class="card">이 과목의 공지가 없어요.</div>';
 function calendar(){let now=new Date(),y=now.getFullYear(),m=now.getMonth(),first=new Date(y,m,1).getDay(),last=new Date(y,m+1,0).getDate(),mine=new Set([...common,...(me.electives||[])]);let h=`<h1>🗓️ ${y}년 ${m+1}월</h1><div class="calendar">`;['일','월','화','수','목','금','토'].forEach(x=>h+=`<div>${x}</div>`);for(let i=0;i<first;i++)h+='<div></div>';for(let d=1;d<=last;d++){let ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;let ps=posts.filter(p=>p.performance_date===ds&&mine.has(p.subject));h+=`<div class="day"><b>${d}</b>${ps.map(p=>`<span class="mark ${subjectClass(p.subject)}" onclick="tab='subjects';render();setTimeout(()=>{document.querySelector('#subjectPick').value='${p.subject}';showSubject('${p.subject}')},50)">${p.subject}</span>`).join('')}</div>`}h+='</div>';shell(h)}
@@ -44,15 +44,15 @@ function write(){if(!adminUnlocked)return shell(`<h1>✏️ 글쓰기</h1><div c
 async function unlock(){if($('#pw').value!=='20400!')return alert('비밀번호가 올바르지 않습니다.');adminUnlocked=true;render()}window.unlock=unlock;
 async function publish(){let subject=$('#ws').value,title=$('#wt').value.trim(),content=$('#wc').value.trim(),date=$('#wd').value,file=$('#wi').files[0];if(!subject||!title||!content||!date)return alert('과목, 제목, 내용, 날짜를 모두 입력하세요.');let image_url=null;if(file){let path=`${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;let {error}=await db.storage.from('attachments').upload(path,file);if(error)return alert(error.message);image_url=db.storage.from('attachments').getPublicUrl(path).data.publicUrl}let {error}=await db.rpc('create_post_secure',{p_password:'20400!',p_author_id:me.student_id,p_subject:subject,p_title:title,p_content:content,p_performance_date:date,p_image_url:image_url});if(error)return alert(error.message);alert('공지 완료!');tab='feed';render()}window.publish=publish;
 async function deletePost(id){
- if(!['20410','20423'].includes(me?.student_id)) return alert('관리자만 삭제할 수 있습니다.');
+ if(!['20410','20423'].includes(me?.student_id)||!adminUnlocked) return alert('관리자 로그인과 비밀번호 확인이 필요합니다.');
  if(!confirm('이 수행평가 공지를 정말 삭제할까요? 삭제하면 되돌릴 수 없습니다.')) return;
- let {error}=await db.from('posts').delete().eq('id',id);
+ let {error}=await db.rpc('delete_post_secure',{p_password:'20400!',p_author_id:me.student_id,p_post_id:id});
  if(error)return alert('삭제 실패: '+error.message);
  alert('삭제되었습니다.');
  render();
 }
 window.deletePost=deletePost;
 if(SUPABASE_URL.includes('여기에_')||SUPABASE_KEY.includes('여기에_')){
- document.getElementById('app').innerHTML='<div class="card"><h1>🔧 Supabase 연결 필요</h1><p>이 새 index.html에는 Project URL과 Publishable key를 다시 넣어야 합니다.</p></div>';
+ document.getElementById('app').innerHTML='<div class="card"><h1>🔧 Supabase 연결 필요</h1><p>Project URL과 Publishable key를 입력해 주세요.</p></div>';
 }else{render();}
 </script></body></html>
