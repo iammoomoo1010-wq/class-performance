@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>우리반 수행평가</title>
+<style>
+:root{--ink:#28262d;--pink:#f4b7c3;--paper:#fffdfd}*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;color:var(--ink);background:#f8e9ee url('https://images.unsplash.com/photo-1513159446162-54eb8bdaa79b?auto=format&fit=crop&w=1200&q=70') center/cover fixed}#app{max-width:700px;margin:auto;min-height:100vh;background:rgba(255,255,255,.82);backdrop-filter:blur(8px);padding:20px 16px 88px}.card{background:white;border:1px solid #eee;border-radius:22px;padding:18px;margin:12px 0;box-shadow:0 6px 22px #c89aa833}h1{font-size:26px;margin:8px 0 18px}h2{font-size:18px;margin:0 0 10px}input,textarea,select,button{width:100%;font:inherit;border-radius:14px;padding:13px;border:1px solid #ddd;margin:6px 0}textarea{min-height:120px}button{background:#2c2930;color:#fff;border:0;font-weight:700}.choice{display:block;padding:11px 8px;border-bottom:1px solid #eee}.nav{position:fixed;bottom:0;left:0;right:0;margin:auto;max-width:700px;display:flex;background:#fff;border-top:1px solid #eee;padding:8px}.nav button{background:transparent;color:#777;margin:0;padding:8px;font-size:12px}.nav button.active{color:#222;font-weight:800}.post{border-left:6px solid #aaa}.meta{font-size:12px;color:#888}.hidden{display:none}.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.day{min-height:70px;border:1px solid #eee;border-radius:10px;padding:5px;font-size:12px}.mark{display:block;border-radius:6px;padding:3px;margin-top:3px;font-size:10px;white-space:nowrap;overflow:hidden}.red{background:#e9b6bd}.blue{background:#b9cbe5}.yellow{background:#eadca5}.green{background:#bdd9c0}.purple{background:#d2c1df}.gray{background:#d8d8d8}
+</style>
+</head><body><div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ★ 여기 두 줄만 Supabase에서 복사한 값으로 바꾸세요 ★ */
+const SUPABASE_URL='https://ggasmikxeecfkncjpjud.supabase.co';
+const SUPABASE_KEY='sb_publishable_mL403lHxGFhl-3gDQGOkrw__6F7osAL';
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const common=['화법과 언어','미적분','영어','미술','체육','정보'];
+const groups={국영수:['독서 토론과 글쓰기','인공지능 수학','수학과제탐구','심화 영어'],사회:['경제','국제 관계의 이해','인문학과 윤리','한국지리 탐구'],과학:['역학과 에너지','물질과 에너지','생물의 유전','지구시스템과학']};
+const all=[...common,...Object.values(groups).flat()];
+let me=JSON.parse(localStorage.getItem('class_me')||'null'), posts=[],tab='feed',adminUnlocked=false;
+const $=s=>document.querySelector(s); const esc=s=>String(s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+function subjectClass(s){if(['화법과 언어','독서 토론과 글쓰기'].includes(s))return'red';if(['미적분','인공지능 수학','수학과제탐구'].includes(s))return'blue';if(['영어','심화 영어'].includes(s))return'yellow';if(groups.사회.includes(s))return'green';if(groups.과학.includes(s))return'purple';return'gray'}
+async function loadPosts(){let {data,error}=await db.from('posts').select('*').order('performance_date',{ascending:true});if(error)return alert(error.message);posts=data||[]}
+function shell(content){$('#app').innerHTML=content+`<div class="nav"><button class="${tab==='feed'?'active':''}" onclick="go('feed')">📰<br>공지</button><button class="${tab==='subjects'?'active':''}" onclick="go('subjects')">📚<br>과목</button><button class="${tab==='calendar'?'active':''}" onclick="go('calendar')">🗓️<br>캘린더</button>${['20410','20423'].includes(me?.student_id)?`<button class="${tab==='write'?'active':''}" onclick="go('write')">✏️<br>글쓰기</button>`:''}</div>`}
+function go(x){tab=x;render()} window.go=go;
+async function render(){
+ if(!me)return login();
+ await loadPosts();
+ if(tab==='feed')return feed();
+ if(tab==='subjects')return subjects();
+ if(tab==='calendar')return calendar();
+ if(tab==='write')return write();
+}
+function login(){shell(`<h1>✦ 우리반 수행평가</h1><div class="card"><h2>로그인</h2><input id="sid" placeholder="학번 (예: 20410)"><input id="name" placeholder="이름"><button onclick="doLogin()">시작하기</button></div>`)}
+async function doLogin(){let sid=$('#sid').value.trim(),name=$('#name').value.trim();let {data,error}=await db.from('students').select('*').eq('student_id',sid).eq('name',name).maybeSingle();if(error||!data)return alert('학번과 이름이 명단과 일치하지 않습니다.');me=data;localStorage.setItem('class_me',JSON.stringify(me));if((data.electives||[]).length!==4)return elective();render()}window.doLogin=doLogin;
+function elective(){let h=`<h1>선택과목 고르기</h1><p>총 <b id="cnt">0</b>개를 선택해야 합니다.</p>`;for(const [g,arr] of Object.entries(groups)){h+=`<div class="card"><h2>${g}</h2>${arr.map(x=>`<label class="choice"><input type="checkbox" value="${x}" onchange="count()"> ${x}</label>`).join('')}<label class="choice"><input type="checkbox" data-none="${g}" onchange="none(this)"> 이 중 선택과목이 없음</label></div>`}h+=`<button onclick="saveElectives()">정확히 4개 선택 완료</button>`;$('#app').innerHTML=h}
+function count(){let n=document.querySelectorAll('input[type=checkbox]:checked:not([data-none])').length;$('#cnt').textContent=n}window.count=count;
+function none(el){let box=el.closest('.card');box.querySelectorAll('input[type=checkbox]:not([data-none])').forEach(x=>{if(el.checked)x.checked=false;x.disabled=el.checked});count()}window.none=none;
+async function saveElectives(){let a=[...document.querySelectorAll('input[type=checkbox]:checked:not([data-none])')].map(x=>x.value);if(a.length!==4)return alert('선택과목은 정확히 4개여야 합니다.');let {data,error}=await db.rpc('save_student_profile',{p_student_id:me.student_id,p_name:me.name,p_electives:a});if(error)return alert(error.message);me=data;localStorage.setItem('class_me',JSON.stringify(me));tab='feed';render()}window.saveElectives=saveElectives;
+function postCard(p){return `<div class="card post ${subjectClass(p.subject)}"><div class="meta">${esc(p.subject)} · 수행일 ${p.performance_date}</div><h2>${esc(p.title)}</h2><div>${esc(p.content).replace(/\n/g,'<br>')}</div>${p.image_url?`<img src="${p.image_url}" style="width:100%;border-radius:14px;margin-top:12px">`:''}</div>`}
+function feed(){let mine=new Set([...common,...(me.electives||[])]);let list=posts.filter(p=>mine.has(p.subject));shell(`<h1>✦ 최신 수행평가</h1>${list.length?list.map(postCard).join(''):'<div class="card">아직 등록된 수행평가가 없어요!</div>'}`)}
+function subjects(){let mine=[...common,...(me.electives||[])];shell(`<h1>📚 과목별 확인</h1><div class="card"><select id="subjectPick" onchange="showSubject(this.value)"><option value="">과목을 선택하세요</option>${mine.map(x=>`<option>${x}</option>`).join('')}</select></div><div id="subjectPosts"></div>`)}window.showSubject=s=>$('#subjectPosts').innerHTML=posts.filter(p=>p.subject===s).map(postCard).join('')||'<div class="card">이 과목의 공지가 없어요.</div>';
+function calendar(){let now=new Date(),y=now.getFullYear(),m=now.getMonth(),first=new Date(y,m,1).getDay(),last=new Date(y,m+1,0).getDate(),mine=new Set([...common,...(me.electives||[])]);let h=`<h1>🗓️ ${y}년 ${m+1}월</h1><div class="calendar">`;['일','월','화','수','목','금','토'].forEach(x=>h+=`<div>${x}</div>`);for(let i=0;i<first;i++)h+='<div></div>';for(let d=1;d<=last;d++){let ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;let ps=posts.filter(p=>p.performance_date===ds&&mine.has(p.subject));h+=`<div class="day"><b>${d}</b>${ps.map(p=>`<span class="mark ${subjectClass(p.subject)}" onclick="tab='subjects';render();setTimeout(()=>{document.querySelector('#subjectPick').value='${p.subject}';showSubject('${p.subject}')},50)">${p.subject}</span>`).join('')}</div>`}h+='</div>';shell(h)}
+function write(){if(!adminUnlocked)return shell(`<h1>✏️ 글쓰기</h1><div class="card"><h2>관리자 비밀번호</h2><input id="pw" type="password" placeholder="비밀번호"><button onclick="unlock()">확인</button></div>`);shell(`<h1>✏️ 새 수행평가 공지</h1><div class="card"><select id="ws"><option value="">과목 선택</option>${all.map(s=>`<option>${s}</option>`).join('')}</select><input id="wt" placeholder="제목"><textarea id="wc" placeholder="수행평가 내용"></textarea><label>수행 날짜<input id="wd" type="date"></label><label>사진 첨부 (선택)<input id="wi" type="file" accept="image/*"></label><button onclick="publish()">＋ 공지 올리기</button></div>`)}
+async function unlock(){if($('#pw').value!=='20400!')return alert('비밀번호가 올바르지 않습니다.');adminUnlocked=true;render()}window.unlock=unlock;
+async function publish(){let subject=$('#ws').value,title=$('#wt').value.trim(),content=$('#wc').value.trim(),date=$('#wd').value,file=$('#wi').files[0];if(!subject||!title||!content||!date)return alert('과목, 제목, 내용, 날짜를 모두 입력하세요.');let image_url=null;if(file){let path=`${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;let {error}=await db.storage.from('attachments').upload(path,file);if(error)return alert(error.message);image_url=db.storage.from('attachments').getPublicUrl(path).data.publicUrl}let {error}=await db.rpc('create_post_secure',{p_password:'20400!',p_author_id:me.student_id,p_subject:subject,p_title:title,p_content:content,p_performance_date:date,p_image_url:image_url});if(error)return alert(error.message);alert('공지 완료!');tab='feed';render()}window.publish=publish;
+render();
+</script></body></html>
